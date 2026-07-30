@@ -85,12 +85,31 @@ export function createGeminiProvider(): Provider {
 
           // Gemini requires tool results in a SUBSEQUENT user turn
           if (msg.toolResults?.length) {
-            const resultParts = msg.toolResults.map((tr) => ({
-              functionResponse: {
-                name: tr.name,
-                response: tr.result as object,
-              },
-            }));
+            const resultParts = msg.toolResults.map((tr) => {
+              // Gemini strictly requires `response` to be a JSON object (Struct)
+              let safeResponse: object;
+              if (typeof tr.result === "string") {
+                try {
+                  safeResponse = JSON.parse(tr.result);
+                  if (typeof safeResponse !== "object" || safeResponse === null) {
+                    safeResponse = { value: safeResponse };
+                  }
+                } catch {
+                  safeResponse = { text: tr.result };
+                }
+              } else if (typeof tr.result === "object" && tr.result !== null) {
+                safeResponse = tr.result as object;
+              } else {
+                safeResponse = { value: tr.result };
+              }
+
+              return {
+                functionResponse: {
+                  name: tr.name,
+                  response: safeResponse,
+                },
+              };
+            });
             contents.push({ role: "user", parts: resultParts });
           }
         }
