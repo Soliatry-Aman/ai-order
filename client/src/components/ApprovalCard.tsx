@@ -1,3 +1,4 @@
+import React from 'react';
 import type { ToolCall } from '../types';
 
 interface Props {
@@ -6,56 +7,59 @@ interface Props {
   onDeny: () => void;
 }
 
-export function ApprovalCard({ toolCall, onApprove, onDeny }: Props) {
-  const orderId = (toolCall.args.orderId as string) ?? '—';
-  const reason = (toolCall.args.reason as string) ?? '—';
+export const ApprovalCard: React.FC<Props> = ({ toolCall, onApprove, onDeny }) => {
+  const orderId = (toolCall.args.orderId as string) ?? (toolCall.args.order_id as string) ?? '—';
+  const reason  = (toolCall.args.reason as string) ?? 'Customer requested cancellation via assistant';
 
   return (
-    <div className="mt-3 rounded-2xl overflow-hidden border border-amber-500/30 bg-amber-950/40 animate-slide-up">
-      {/* Header banner */}
-      <div className="flex items-center gap-3 px-4 py-3 bg-amber-500/10 border-b border-amber-500/20">
-        <div className="w-8 h-8 rounded-full bg-amber-500/20 flex items-center justify-center flex-shrink-0">
-          <span className="text-base">⚠️</span>
+    <div className="mt-3.5 rounded-2xl overflow-hidden border border-amber-500/40 bg-amber-950/40 shadow-2xl animate-slide-up">
+      {/* Header Banner */}
+      <div className="flex items-center gap-3 px-4 py-3 bg-amber-500/15 border-b border-amber-500/25">
+        <div className="w-9 h-9 rounded-xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center flex-shrink-0 animate-pulse">
+          <span className="text-lg">⚠️</span>
         </div>
         <div>
-          <p className="text-sm font-semibold text-amber-300">Action Requires Your Approval</p>
-          <p className="text-xs text-amber-400/70">This action is irreversible. Please review carefully.</p>
+          <p className="text-xs font-bold text-amber-200 uppercase tracking-wider">Human Approval Required</p>
+          <p className="text-[11px] text-amber-300/80 mt-0.5">Cancelling an order is irreversible. Please confirm action.</p>
         </div>
       </div>
 
-      {/* Details */}
-      <div className="px-4 py-3 space-y-3">
-        <p className="text-xs text-slate-400">
-          The assistant wants to <span className="font-mono font-bold text-amber-300 bg-amber-900/40 px-1.5 py-0.5 rounded">cancel_order</span>
-        </p>
+      {/* Details Box */}
+      <div className="p-4 space-y-3">
+        <div className="flex items-center justify-between text-xs">
+          <span className="text-slate-400 font-medium">Requested Tool Action:</span>
+          <span className="font-mono font-bold text-amber-300 bg-amber-900/50 px-2 py-0.5 rounded-md border border-amber-500/30">
+            cancel_order
+          </span>
+        </div>
 
-        <div className="grid grid-cols-2 gap-2">
-          <div className="bg-black/30 rounded-xl p-3 border border-white/5">
-            <p className="text-[10px] uppercase tracking-wider text-slate-500 mb-1">Order ID</p>
+        <div className="grid grid-cols-2 gap-2.5">
+          <div className="bg-black/40 rounded-xl p-3 border border-white/5">
+            <p className="text-[10px] uppercase tracking-wider font-bold text-slate-400 mb-1">Target Order</p>
             <p className="text-sm font-mono font-bold text-white">#{orderId}</p>
           </div>
-          <div className="bg-black/30 rounded-xl p-3 border border-white/5">
-            <p className="text-[10px] uppercase tracking-wider text-slate-500 mb-1">Reason</p>
-            <p className="text-xs text-slate-300 leading-relaxed">{reason}</p>
+          <div className="bg-black/40 rounded-xl p-3 border border-white/5">
+            <p className="text-[10px] uppercase tracking-wider font-bold text-slate-400 mb-1">Reason Stated</p>
+            <p className="text-xs text-slate-200 leading-snug line-clamp-2">{reason}</p>
           </div>
         </div>
       </div>
 
-      {/* Actions */}
-      <div className="flex gap-2 px-4 pb-4">
+      {/* Action Buttons */}
+      <div className="flex gap-2.5 px-4 pb-4">
         <button
           onClick={onDeny}
-          className="flex-1 py-2.5 rounded-xl border border-white/10 text-slate-300 text-sm font-medium hover:bg-white/5 hover:border-white/20 transition-all duration-200"
+          className="flex-1 py-2.5 rounded-xl border border-white/12 text-slate-300 text-xs font-bold hover:bg-white/8 hover:text-white transition-all duration-200 cursor-pointer"
         >
-          Deny Request
+          ✕ Deny Request
         </button>
         <button
           onClick={onApprove}
-          className="flex-1 py-2.5 rounded-xl bg-red-600 text-white text-sm font-semibold hover:bg-red-500 transition-all duration-200 glow-red shadow-lg"
+          className="flex-1 py-2.5 rounded-xl bg-red-600 hover:bg-red-500 text-white text-xs font-bold transition-all duration-200 glow-red shadow-lg cursor-pointer flex items-center justify-center gap-1.5"
         >
           ✓ Approve Cancellation
         </button>
       </div>
     </div>
   );
-}
+};

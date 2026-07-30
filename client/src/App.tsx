@@ -1,6 +1,12 @@
-
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useChat } from './hooks/useChat';
+import { SidebarNav } from './components/SidebarNav';
+import type { NavTab } from './components/SidebarNav';
+import { HistoryPanel } from './components/HistoryPanel';
+import { PoliciesPanel } from './components/PoliciesPanel';
+import { SettingsModal } from './components/SettingsModal';
+import type { ThemeMode, FontSize } from './components/SettingsModal';
+import { HelpModal } from './components/HelpModal';
 import { ChatWindow } from './components/ChatWindow';
 import { MessageInput } from './components/MessageInput';
 
@@ -11,57 +17,113 @@ function App() {
     pendingApproval,
     sendMessage,
     clearChat,
+    deleteMessage,
     stop,
     handleApproval,
   } = useChat();
 
-  // Prefill state: a prompt template clicked by the user that populates the input
+  const [activeTab, setActiveTab] = useState<NavTab>('chat');
+  const [showSettings, setShowSettings] = useState(false);
+  const [showHelp, setShowHelp] = useState(false);
+  const [theme, setTheme] = useState<ThemeMode>('indigo');
+  const [fontSize, setFontSize] = useState<FontSize>('normal');
+  const [soundEnabled, setSoundEnabled] = useState(true);
+
   const [prefillText, setPrefillText] = useState<string | undefined>();
-  const handlePrefill = useCallback((text: string) => setPrefillText(text), []);
+  const handlePrefill = useCallback((text: string) => {
+    setPrefillText(text);
+    setActiveTab('chat');
+  }, []);
+
   const handlePrefillConsumed = useCallback(() => setPrefillText(undefined), []);
 
+  const handleAskPolicy = (query: string) => {
+    sendMessage(query);
+    setActiveTab('chat');
+  };
+
+  useEffect(() => {
+    document.body.className = `theme-${theme}`;
+  }, [theme]);
+
   return (
-    <div className="flex h-screen bg-slate-950 overflow-hidden">
-      {/* Decorative background gradient orbs */}
-      <div className="fixed inset-0 pointer-events-none overflow-hidden">
-        <div className="absolute -top-40 -left-40 w-96 h-96 rounded-full bg-indigo-600/10 blur-3xl" />
-        <div className="absolute -bottom-40 -right-40 w-96 h-96 rounded-full bg-purple-600/10 blur-3xl" />
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-64 h-64 rounded-full bg-pink-600/5 blur-3xl" />
+    <div className={`flex h-screen w-screen overflow-hidden bg-slate-950 text-slate-100 ${
+      fontSize === 'compact' ? 'text-xs' : fontSize === 'large' ? 'text-base' : 'text-sm'
+    }`}>
+      {/* Subtle Background Glow */}
+      <div className="fixed inset-0 pointer-events-none overflow-hidden z-0">
+        <div className="absolute top-0 right-1/4 w-[600px] h-[600px] rounded-full bg-indigo-900/10 blur-[140px]" />
+        <div className="absolute bottom-0 left-1/4 w-[500px] h-[500px] rounded-full bg-slate-800/20 blur-[140px]" />
       </div>
 
-      {/* Main layout */}
-      <div className="flex-1 flex flex-col items-center justify-center p-4 sm:p-6 lg:p-8 relative">
-        <div className="w-full max-w-3xl h-full max-h-[900px] flex flex-col glass rounded-3xl overflow-hidden shadow-2xl">
+      {/* Vertical Navigation Bar */}
+      <SidebarNav
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
+        onOpenSettings={() => setShowSettings(true)}
+        onOpenHelp={() => setShowHelp(true)}
+        onNewChat={clearChat}
+        messageCount={messages.length}
+      />
 
-          {/* ── Header ─────────────────────────────────────────────────── */}
-          <header className="flex items-center justify-between px-6 py-4 border-b border-white/8 bg-white/2">
+      {/* Slide-out Side Panels */}
+      {activeTab === 'history' && (
+        <HistoryPanel
+          messages={messages}
+          onPrefill={handlePrefill}
+          onSend={(text) => { sendMessage(text); setActiveTab('chat'); }}
+          onDeleteMessage={deleteMessage}
+          onClose={() => setActiveTab('chat')}
+          onClear={clearChat}
+        />
+      )}
+
+      {activeTab === 'policies' && (
+        <PoliciesPanel
+          onAskPolicy={handleAskPolicy}
+          onClose={() => setActiveTab('chat')}
+        />
+      )}
+
+      {/* Main Support Workspace Canvas */}
+      <main className="flex-1 flex flex-col items-center justify-center p-3 sm:p-5 relative z-10 min-w-0">
+        <div className="w-full max-w-4xl h-full flex flex-col bg-slate-900/80 backdrop-blur-2xl rounded-2xl overflow-hidden shadow-2xl border border-white/10">
+
+          {/* Top Dashboard Header - Clean SaaS Style */}
+          <header className="flex items-center justify-between px-5 py-3.5 border-b border-white/10 bg-slate-950/60 backdrop-blur-xl">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-lg">
-                <span className="text-xl">📦</span>
+              <div className="w-8 h-8 rounded-xl bg-indigo-600/20 border border-indigo-500/30 flex items-center justify-center text-indigo-400 font-bold text-sm shadow-sm">
+                SD
               </div>
               <div>
-                <h1 className="text-base font-bold text-white leading-tight">AI Order Assistant</h1>
-                <div className="flex items-center gap-1.5 mt-0.5">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                  <p className="text-[11px] text-slate-400">Support Rep Dashboard</p>
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] font-mono text-slate-400">ShopDesk / Support Desk</span>
+                  <span className="text-slate-600">/</span>
+                  <h1 className="text-xs sm:text-sm font-bold text-white leading-tight">Live Orders Workspace</h1>
+                </div>
+                <div className="flex items-center gap-2 mt-0.5">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400" />
+                  <p className="text-[11px] text-slate-400 font-medium">Store Database Synced · Live API Connected</p>
                 </div>
               </div>
             </div>
 
-            <button
-              onClick={clearChat}
-              className="flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs text-slate-400 hover:text-slate-200 hover:bg-white/8 border border-transparent hover:border-white/10 transition-all duration-200"
-              title="Start new conversation"
-              aria-label="New conversation"
-            >
-              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-              </svg>
-              New Chat
-            </button>
+            {/* Quick Action Buttons */}
+            <div className="flex items-center gap-2">
+              <button
+                onClick={clearChat}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs text-slate-300 hover:text-white bg-white/5 hover:bg-white/10 border border-white/10 transition-colors"
+                title="Start new conversation"
+              >
+                <svg className="w-3.5 h-3.5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                </svg>
+                <span className="hidden sm:inline font-medium">New Session</span>
+              </button>
+            </div>
           </header>
 
-          {/* ── Chat Area ──────────────────────────────────────────────── */}
+          {/* Main Chat Canvas */}
           <ChatWindow
             messages={messages}
             isLoading={isLoading}
@@ -69,9 +131,10 @@ function App() {
             onApprove={handleApproval}
             onSend={sendMessage}
             onPrefill={handlePrefill}
+            onDeleteMessage={deleteMessage}
           />
 
-          {/* ── Input Area ─────────────────────────────────────────────── */}
+          {/* Floating Message Input Bar */}
           <MessageInput
             onSend={sendMessage}
             onStop={stop}
@@ -82,11 +145,28 @@ function App() {
           />
         </div>
 
-        {/* Footer attribution */}
-        <p className="mt-3 text-[10px] text-slate-600 text-center">
-          Powered by Multi-Provider AI Engine · All data is mock / local only
+        {/* Clean Footer Attribution */}
+        <p className="mt-2 text-[11px] text-slate-500 text-center font-medium">
+          ShopDesk Support Workspace · Internal Order Management System
         </p>
-      </div>
+      </main>
+
+      {/* Modals */}
+      {showSettings && (
+        <SettingsModal
+          currentTheme={theme}
+          onChangeTheme={setTheme}
+          fontSize={fontSize}
+          onChangeFontSize={setFontSize}
+          soundEnabled={soundEnabled}
+          onToggleSound={() => setSoundEnabled(v => !v)}
+          onClose={() => setShowSettings(false)}
+        />
+      )}
+
+      {showHelp && (
+        <HelpModal onClose={() => setShowHelp(false)} />
+      )}
     </div>
   );
 }

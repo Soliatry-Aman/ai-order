@@ -21,17 +21,13 @@ export function useChat() {
     messageId: string;
   } | null>(null);
 
-  // KEY FIX: Keep a ref that always has the latest messages
-  // so async callbacks in the loop never read stale closure values
   const messagesRef = useRef<Message[]>(messages);
   const abortControllerRef = useRef<AbortController | null>(null);
 
-  // Keep messagesRef in sync with state
   useEffect(() => {
     messagesRef.current = messages;
   }, [messages]);
 
-  // Persist to localStorage
   useEffect(() => {
     localStorage.setItem('chat_messages', JSON.stringify(messages));
   }, [messages]);
@@ -45,6 +41,14 @@ export function useChat() {
       abortControllerRef.current = null;
     }
     setIsLoading(false);
+  };
+
+  const deleteMessage = (id: string) => {
+    setMessages(prev => {
+      const updated = prev.filter(m => m.id !== id);
+      messagesRef.current = updated;
+      return updated;
+    });
   };
 
   const stop = () => {
@@ -64,14 +68,14 @@ export function useChat() {
 
   /**
    * Runs one turn of the agentic loop.
-   * Uses messagesRef.current for always-fresh state.
+   * If existingMessageId is provided, streams follow-up text into that SAME message slot.
    */
-  const runAgentLoop = async (turnCount: number) => {
+  const runAgentLoop = async (turnCount: number, existingMessageId?: string) => {
     if (turnCount >= MAX_TURNS) {
       const limitMsg: Message = {
         id: crypto.randomUUID(),
         role: 'model',
-        text: 'I have reached the maximum number of reasoning steps. Please start a new conversation or rephrase your request.',
+        text: 'I have reached the maximum number of reasoning steps. Please rephrase your request.',
       };
       setMessages(prev => {
         const updated = [...prev, limitMsg];
@@ -86,15 +90,17 @@ export function useChat() {
     const controller = new AbortController();
     abortControllerRef.current = controller;
 
-    // Create the model message slot upfront
-    const modelMessageId = crypto.randomUUID();
-    const modelMsg: Message = { id: modelMessageId, role: 'model', text: '', toolCalls: [], toolResults: [] };
+    // Reuse existing model message slot or create a new one
+    const modelMessageId = existingMessageId ?? crypto.randomUUID();
 
-    setMessages(prev => {
-      const updated = [...prev, modelMsg];
-      messagesRef.current = updated;
-      return updated;
-    });
+    if (!existingMessageId) {
+      const modelMsg: Message = { id: modelMessageId, role: 'model', text: '', toolCalls: [], toolResults: [] };
+      setMessages(prev => {
+        const updated = [...prev, modelMsg];
+        messagesRef.current = updated;
+        return updated;
+      });
+    }
 
     const updateModelMsg = (updater: (msg: Message) => Message) => {
       setMessages(prev => {
@@ -108,8 +114,7 @@ export function useChat() {
       const response = await fetch(API_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        // Send the messages as they are right now (excluding the placeholder we just added)
-        body: JSON.stringify({ messages: messagesRef.current.filter(m => m.id !== modelMessageId) }),
+        body: JSON.stringify({ messages: messagesRef.current.filter(m => m.id !== modelMessageId || m.text || m.toolCalls?.length) }),
         signal: controller.signal,
       });
 
@@ -125,7 +130,6 @@ export function useChat() {
       let sseBuffer = '';
       let readerDone = false;
 
-      // Tool calls collected during this stream turn
       const collectedToolCalls: ToolCall[] = [];
 
       while (!readerDone) {
@@ -149,7 +153,6 @@ export function useChat() {
                 updateModelMsg(m => ({ ...m, text: (m.text ?? '') + data.text }));
               } else if (data.type === 'tool_call' && data.toolCall) {
                 const call: ToolCall = {
-                  // Use server-provided id (important for OpenAI-compatible providers)
                   id: data.toolCall.id ?? crypto.randomUUID(),
                   name: data.toolCall.name,
                   args: data.toolCall.args ?? {},
@@ -157,38 +160,35 @@ export function useChat() {
                 collectedToolCalls.push(call);
                 updateModelMsg(m => ({ ...m, toolCalls: [...(m.toolCalls ?? []), call] }));
               } else if (data.type === 'error') {
-                // Provider sent a structured error (e.g. rate limit, bad key)
                 updateModelMsg(m => ({
                   ...m,
-                  text: (m.text ?? '') + `\n\n⚠️ Provider error: ${data.message}`,
+                  text: (m.text ?? '') + `\n\n⚠️ ${data.message}`,
                 }));
                 readerDone = true;
               }
             } catch {
-              // malformed SSE chunk – skip
+              // skip malformed SSE chunk
             }
           }
         }
       }
 
-      // ── Stream finished. Now execute all collected tool calls ─────────────────
+      // If no new tool calls were emitted in this turn, we are done
       if (collectedToolCalls.length === 0) {
-        // No tool calls → final response. We're done.
         setIsLoading(false);
         return;
       }
 
+      // Execute collected tool calls
       const toolResults: ToolResult[] = [];
 
       for (const call of collectedToolCalls) {
-        // cancel_order requires human approval → PAUSE
         if (call.name === 'cancel_order') {
           setPendingApproval({ toolCall: call, messageId: modelMessageId });
           setIsLoading(false);
-          return; // Execution resumes via handleApproval
+          return;
         }
 
-        // Execute non-destructive tools automatically
         const result = await executeTool(call.name, call.args);
         const toolResult: ToolResult = { toolCallId: call.id, name: call.name, result };
         toolResults.push(toolResult);
@@ -199,12 +199,11 @@ export function useChat() {
         }));
       }
 
-      // All tools done, loop again with updated context
-      await runAgentLoop(turnCount + 1);
+      // Continue loop into the SAME message slot to receive follow-up text answer
+      await runAgentLoop(turnCount + 1, modelMessageId);
 
     } catch (err: unknown) {
       if (err instanceof Error && err.name === 'AbortError') {
-        // Stop was clicked – already handled in stop()
         return;
       }
       console.error('Agent loop error:', err);
@@ -217,9 +216,6 @@ export function useChat() {
     }
   };
 
-  /**
-   * Called when the user approves or denies cancel_order.
-   */
   const handleApproval = async (approved: boolean) => {
     if (!pendingApproval) return;
     const { toolCall, messageId } = pendingApproval;
@@ -236,7 +232,6 @@ export function useChat() {
       result,
     };
 
-    // Attach the result to the model message that triggered the approval
     setMessages(prev => {
       const updated = prev.map(m =>
         m.id === messageId
@@ -247,9 +242,8 @@ export function useChat() {
       return updated;
     });
 
-    // Give React a tick to flush, then continue the loop
     setTimeout(() => {
-      runAgentLoop(0);
+      runAgentLoop(1, messageId);
     }, 0);
   };
 
@@ -262,7 +256,6 @@ export function useChat() {
       messagesRef.current = updated;
       return updated;
     });
-    // Use setTimeout to ensure state has flushed before starting loop
     setTimeout(() => {
       runAgentLoop(0);
     }, 0);
@@ -274,6 +267,7 @@ export function useChat() {
     pendingApproval,
     sendMessage,
     clearChat,
+    deleteMessage,
     stop,
     handleApproval,
   };

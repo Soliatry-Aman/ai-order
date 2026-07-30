@@ -14,25 +14,23 @@ import OpenAI from "openai";
 import type { Provider, ClientMessage, SseEvent } from "./types";
 import { OPENAI_TOOLS, OPENAI_SYSTEM_PROMPT } from "./tools";
 
+class FailedGenerationError extends Error {}
+
 interface OpenAICompatConfig {
   providerName: string;
   apiKey: string;
   baseURL: string;
   defaultModel: string;
-  /** Optional extra headers (e.g. OpenRouter requires HTTP-Referer) */
   extraHeaders?: Record<string, string>;
 }
 
-/** Returns true if the value looks like a real API key (not an unfilled placeholder) */
 function isRealKey(key: string | undefined): key is string {
   if (!key) return false;
-  // Common placeholder patterns left by users who haven't filled in the key
   if (/^your[_\-]/i.test(key)) return false;
   if (/placeholder|example|changeme|insert|paste/i.test(key)) return false;
   if (key.length < 10) return false;
   return true;
 }
-
 
 function buildOpenAICompatProvider(cfg: OpenAICompatConfig): Provider {
   const client = new OpenAI({
@@ -47,7 +45,6 @@ function buildOpenAICompatProvider(cfg: OpenAICompatConfig): Provider {
     name: `${cfg.providerName} (${model})`,
 
     async *stream(messages: ClientMessage[]): AsyncGenerator<SseEvent> {
-      // ── Convert client messages → OpenAI message format ──────────────────
       const openaiMessages: OpenAI.Chat.ChatCompletionMessageParam[] = [
         { role: "system", content: OPENAI_SYSTEM_PROMPT },
       ];
@@ -61,11 +58,8 @@ function buildOpenAICompatProvider(cfg: OpenAICompatConfig): Provider {
         }
 
         if (msg.role === "model") {
-          // Model assistant message (may include tool_calls)
           const assistantMsg: OpenAI.Chat.ChatCompletionAssistantMessageParam = {
             role: "assistant",
-            // IMPORTANT: must be null (not empty string) when the assistant only made tool calls.
-            // OpenAI spec: content is null when tool_calls are present and no text was generated.
             content: msg.text || null,
           };
 
@@ -82,7 +76,6 @@ function buildOpenAICompatProvider(cfg: OpenAICompatConfig): Provider {
 
           openaiMessages.push(assistantMsg);
 
-          // Each tool result goes in its own "tool" role message
           if (msg.toolResults?.length) {
             for (const tr of msg.toolResults) {
               openaiMessages.push({
@@ -95,12 +88,7 @@ function buildOpenAICompatProvider(cfg: OpenAICompatConfig): Provider {
         }
       }
 
-      // ── Stream from OpenAI-compatible API ────────────────────────────────
-      /**
-       * Helper: run one streaming request and yield its events.
-       * Returns true if generation succeeded, false if we hit a failed_generation.
-       */
-      async function* runStream(toolChoice: "auto" | "none"): AsyncGenerator<SseEvent, boolean> {
+      async function* runStream(toolChoice: "auto" | "none"): AsyncGenerator<SseEvent> {
         const stream = await client.chat.completions.create({
           model,
           messages: openaiMessages,
@@ -118,21 +106,16 @@ function buildOpenAICompatProvider(cfg: OpenAICompatConfig): Provider {
           const delta = chunk.choices[0]?.delta;
           const finishReason = chunk.choices[0]?.finish_reason;
 
-          // ── Groq failed to generate a valid tool call ──────────────────
-          // Return false so the caller can retry with tool_choice="none"
-          // Note: "failed_generation" is Groq-specific and not in the OpenAI SDK union type
           if ((finishReason as string) === "failed_generation") {
-            return false;
+            throw new FailedGenerationError("Groq failed_generation");
           }
 
           if (!delta) continue;
 
-          // Text
           if (delta.content) {
             yield { type: "text", text: delta.content };
           }
 
-          // Tool call deltas – accumulate
           if (delta.tool_calls) {
             for (const tc of delta.tool_calls) {
               const idx = tc.index;
@@ -146,7 +129,6 @@ function buildOpenAICompatProvider(cfg: OpenAICompatConfig): Provider {
             }
           }
 
-          // When the model finishes the tool-call sequence, emit all collected calls
           if (finishReason === "tool_calls" || finishReason === "stop") {
             for (const [, pending] of pendingCalls) {
               let args: Record<string, unknown> = {};
@@ -164,7 +146,6 @@ function buildOpenAICompatProvider(cfg: OpenAICompatConfig): Provider {
           }
         }
 
-        // Safety flush if stream ended without explicit finish_reason
         if (pendingCalls.size > 0) {
           for (const [, pending] of pendingCalls) {
             let args: Record<string, unknown> = {};
@@ -172,29 +153,25 @@ function buildOpenAICompatProvider(cfg: OpenAICompatConfig): Provider {
             yield { type: "tool_call", toolCall: { id: pending.id, name: pending.name, args } };
           }
         }
-
-        return true;
       }
 
-      // First attempt: normal auto tool use
-      let succeeded = true;
-      for await (const event of runStream("auto")) {
-        if (typeof event === "boolean") { succeeded = event; break; }
-        yield event;
-      }
-
-      // If tool generation failed, retry with no tools so the model answers in plain text
-      if (!succeeded) {
-        console.warn("  ⚠️  failed_generation detected — retrying with tool_choice=none for plain-text fallback");
-        for await (const event of runStream("none")) {
-          if (typeof event !== "boolean") yield event;
+      try {
+        for await (const event of runStream("auto")) {
+          yield event;
+        }
+      } catch (err) {
+        if (err instanceof FailedGenerationError) {
+          console.warn("  ⚠️  failed_generation detected — retrying with tool_choice=none for plain-text fallback");
+          for await (const event of runStream("none")) {
+            yield event;
+          }
+        } else {
+          throw err;
         }
       }
     },
   };
 }
-
-// ── Named factory functions for each provider ────────────────────────────────
 
 export function createGroqProvider(): Provider {
   const apiKey = process.env.GROQ_API_KEY;
