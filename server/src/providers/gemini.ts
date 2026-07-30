@@ -75,7 +75,7 @@ export function createGeminiProvider(): Provider {
 
           if (msg.toolCalls?.length) {
             for (const call of msg.toolCalls) {
-              modelParts.push({ functionCall: { name: call.name, args: call.args } });
+              modelParts.push({ functionCall: { name: call.name.trim(), args: call.args } });
             }
           }
 
@@ -131,7 +131,7 @@ export function createGeminiProvider(): Provider {
                     type: "tool_call",
                     toolCall: {
                       id: (call as any).id ?? crypto.randomUUID(),
-                      name: call.name!,
+                      name: call.name!.trim(),
                       args: (call.args ?? {}) as Record<string, unknown>,
                     },
                   };
@@ -152,10 +152,7 @@ export function createGeminiProvider(): Provider {
               if (attempt < MAX_RETRIES) {
                 const waitMs = parseRetryDelay(err);
                 console.warn(`  ⚠️  Rate limited on ${candidate}. Waiting ${waitMs}ms before retry ${attempt}/${MAX_RETRIES}...`);
-                yield { type: "text", text: `\n\n⏳ Rate limit hit, retrying in ${Math.ceil(waitMs / 1000)}s...` };
-                await sleep(waitMs);
-                // Remove the retry message so it doesn't appear in final output — 
-                // we emit a correction but keep it simple by just continuing
+                await sleep(waitMs); // silently wait — no user-visible message
                 continue;
               }
               // Exhausted retries on this model, move to next

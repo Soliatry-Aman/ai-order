@@ -68,7 +68,7 @@ function buildOpenAICompatProvider(cfg: OpenAICompatConfig): Provider {
               id: call.id,
               type: "function" as const,
               function: {
-                name: call.name,
+                name: call.name.trim(),
                 arguments: JSON.stringify(call.args),
               },
             }));
@@ -113,6 +113,9 @@ function buildOpenAICompatProvider(cfg: OpenAICompatConfig): Provider {
           if (!delta) continue;
 
           if (delta.content) {
+            if (/failed_generation|failed to call a function/i.test(delta.content)) {
+              throw new FailedGenerationError("Groq failed_generation error output");
+            }
             yield { type: "text", text: delta.content };
           }
 
@@ -124,7 +127,7 @@ function buildOpenAICompatProvider(cfg: OpenAICompatConfig): Provider {
               }
               const pending = pendingCalls.get(idx)!;
               if (tc.id) pending.id = tc.id;
-              if (tc.function?.name) pending.name = tc.function.name;
+              if (tc.function?.name) pending.name = tc.function.name.trim();
               if (tc.function?.arguments) pending.argsRaw += tc.function.arguments;
             }
           }
@@ -161,13 +164,9 @@ function buildOpenAICompatProvider(cfg: OpenAICompatConfig): Provider {
         }
       } catch (err) {
         if (err instanceof FailedGenerationError) {
-          console.warn("  ⚠️  failed_generation detected — retrying with tool_choice=none for plain-text fallback");
-          for await (const event of runStream("none")) {
-            yield event;
-          }
-        } else {
-          throw err;
+          console.warn("  ⚠️  failed_generation detected — rethrowing to trigger provider fallback");
         }
+        throw err;
       }
     },
   };
@@ -206,6 +205,6 @@ export function createCerebrasProvider(): Provider {
     providerName: "Cerebras",
     apiKey,
     baseURL: "https://api.cerebras.ai/v1",
-    defaultModel: "llama-3.3-70b",
+    defaultModel: "llama3.3-70b",
   });
 }
