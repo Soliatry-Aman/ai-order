@@ -12,6 +12,10 @@ services:
         value: gemini
       - key: GEMINI_API_KEY
         sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: CEREBRAS_API_KEY
+        sync: false
       - key: RENDER_EXTERNAL_URL
         fromService:
           type: web
