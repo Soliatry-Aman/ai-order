@@ -168,4 +168,24 @@ app.listen(PORT, () => {
   console.log(`✅  Server ready on http://localhost:${PORT}`);
   console.log(`   Health: http://localhost:${PORT}/api/health`);
   console.log(`   Chat:   POST http://localhost:${PORT}/api/chat\n`);
+
+  // ── Keep-alive self-ping (prevents Render free tier cold starts) ──────────
+  // Render spins down services after 15 min of inactivity.
+  // We ping our own /api/health every 14 min to stay warm.
+  if (process.env.NODE_ENV === "production" && process.env.RENDER_EXTERNAL_URL) {
+    const PING_INTERVAL_MS = 14 * 60 * 1000; // 14 minutes
+    const healthUrl = `${process.env.RENDER_EXTERNAL_URL}/api/health`;
+
+    setInterval(async () => {
+      try {
+        const res = await fetch(healthUrl);
+        const data = await res.json() as { status: string };
+        console.log(`🏓  Keep-alive ping → ${healthUrl} — ${data.status}`);
+      } catch (err) {
+        console.warn(`⚠️  Keep-alive ping failed:`, err instanceof Error ? err.message : err);
+      }
+    }, PING_INTERVAL_MS);
+
+    console.log(`🏓  Keep-alive enabled → pinging ${healthUrl} every 14 min`);
+  }
 });

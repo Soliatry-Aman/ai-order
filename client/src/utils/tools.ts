@@ -20,7 +20,6 @@ function findBestFuzzyMatch(
   items: Array<{ sku: string; name: string; inStock: number }>
 ) {
   const q = query.toLowerCase();
-  // Allow up to ~30% of the query length as edit distance (min 2 edits)
   const threshold = Math.max(2, Math.floor(q.length * 0.35));
 
   let bestItem: (typeof items)[number] | null = null;
@@ -43,25 +42,40 @@ export async function executeTool(name: string, args: Record<string, unknown>) {
   try {
     switch (name) {
       case "get_order": {
-        const orderId = args.orderId as string;
-        if (!orderId) return { error: "Missing orderId argument." };
-        const res = await fetch(`${DB_URL}/orders/${orderId}`);
-        if (res.status === 404) return { error: `Order ${orderId} not found.` };
-        if (!res.ok) throw new Error(`Server error: ${res.status}`);
-        return await res.json();
+        const query = ((args.orderId ?? args.query ?? args.customer ?? args.order_id) as string)?.trim();
+        if (!query) return { error: "Missing orderId or customer name argument." };
+
+        // 1. Try exact order ID endpoint
+        const res = await fetch(`${DB_URL}/orders/${query}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data && !data.error && data.id) return data;
+        }
+
+        // 2. Search all orders by ID or customer name (case-insensitive substring match)
+        const allRes = await fetch(`${DB_URL}/orders`);
+        if (allRes.ok) {
+          const allOrders: Array<{ id: string; customer: string; status: string; total: number }> = await allRes.json();
+          const lowerQ = query.toLowerCase();
+          const match = allOrders.find(o =>
+            o.id.toLowerCase() === lowerQ ||
+            o.customer.toLowerCase().includes(lowerQ)
+          );
+          if (match) return match;
+        }
+
+        return { error: `No order found matching "${query}".` };
       }
       case "check_inventory": {
         const query = (args.sku ?? args.productName ?? args.name ?? args.query) as string;
         if (!query) return { error: "Missing product SKU or name to search for." };
 
-        // First try exact SKU match
         const skuRes = await fetch(`${DB_URL}/inventory?sku=${encodeURIComponent(query)}`);
         if (skuRes.ok) {
           const skuData = await skuRes.json();
           if (Array.isArray(skuData) && skuData.length > 0) return skuData[0];
         }
 
-        // Fallback: fetch all and match by product name/SKU (case-insensitive substring)
         const allRes = await fetch(`${DB_URL}/inventory`);
         if (!allRes.ok) throw new Error(`Server error: ${allRes.status}`);
         const allData: Array<{ sku: string; name: string; inStock: number }> = await allRes.json();
@@ -72,7 +86,6 @@ export async function executeTool(name: string, args: Record<string, unknown>) {
         );
         if (match) return match;
 
-        // Fuzzy fallback: tolerate typos (e.g. SLV-BLU-42 → SYL-BLU-42)
         const fuzzyMatch = findBestFuzzyMatch(query, allData);
         if (fuzzyMatch) return fuzzyMatch;
 
@@ -88,10 +101,9 @@ export async function executeTool(name: string, args: Record<string, unknown>) {
         return data[0];
       }
       case "cancel_order": {
-        const orderId = args.orderId as string;
-        const reason = args.reason as string;
+        const orderId = (args.orderId ?? args.order_id) as string;
+        const reason = (args.reason as string) ?? "Customer requested cancellation";
         if (!orderId) return { error: "Missing orderId argument." };
-        if (!reason) return { error: "Missing reason argument." };
         const res = await fetch(`${DB_URL}/orders/${orderId}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
@@ -102,7 +114,7 @@ export async function executeTool(name: string, args: Record<string, unknown>) {
         return await res.json();
       }
       default:
-        return { error: `Unknown tool: "${name}". This is a model hallucination.` };
+        return { error: `Unknown tool: "${name}".` };
     }
   } catch (error: unknown) {
     const msg = error instanceof Error ? error.message : "Unknown error";

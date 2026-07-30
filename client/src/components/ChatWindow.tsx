@@ -90,7 +90,7 @@ export function ChatWindow({ messages, isLoading, pendingApproval, onApprove, on
   };
 
   return (
-    <div className="flex-1 overflow-y-auto p-4 sm:p-6 flex flex-col gap-4">
+    <div className="flex-1 overflow-y-auto p-4 sm:p-6 flex flex-col gap-5">
       {/* Clean Minimal Hero */}
       {messages.length === 0 && (
         <div className="flex-1 flex flex-col items-center justify-center gap-5 py-6 animate-fade-in my-auto">
@@ -152,7 +152,7 @@ export function ChatWindow({ messages, isLoading, pendingApproval, onApprove, on
             </div>
           )}
 
-          <div className={`flex flex-col gap-1 max-w-[85%] sm:max-w-[78%] min-w-0 ${msg.role === 'user' ? 'items-end ml-auto' : 'items-start'}`}>
+          <div className={`flex flex-col gap-2 max-w-[85%] sm:max-w-[78%] min-w-0 ${msg.role === 'user' ? 'items-end ml-auto' : 'items-start'}`}>
             {/* Header label & action */}
             <div className="flex items-center gap-2 px-1 text-[10px] uppercase tracking-wider text-slate-400 font-semibold">
               {msg.role === 'user' ? (
