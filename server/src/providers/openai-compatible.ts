@@ -179,7 +179,7 @@ export function createGroqProvider(): Provider {
     providerName: "Groq",
     apiKey,
     baseURL: "https://api.groq.com/openai/v1",
-    defaultModel: "llama-3.3-70b-versatile",
+    defaultModel: "llama-3.1-8b-instant",
   });
 }
 
