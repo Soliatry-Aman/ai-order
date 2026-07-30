@@ -15,13 +15,10 @@ cd ../server && npm install
 cp server/.env.example server/.env
 # Edit server/.env and add your API key (see "AI Providers" below)
 
-# 3. Run the mock database (Terminal 1)
-cd server && npm run db
-
-# 4. Run the backend proxy (Terminal 2)
+# 3. Run the backend proxy & API (Terminal 1)
 cd server && npm run dev
 
-# 5. Run the frontend (Terminal 3)
+# 4. Run the frontend (Terminal 2)
 cd client && npm run dev
 ```
 
@@ -57,21 +54,17 @@ This is a monorepo with two deployable services:
 
 ```
 /client  →  Vercel  (React/Vite frontend)
-/server  →  Railway (Node.js/Express backend)
+/server  →  Render  (Node.js/Express backend)
 ```
 
-### Backend → Railway
+### Backend → Render (Free Tier)
 
-1. Create a new project at [railway.app](https://railway.app).
-2. Connect your GitHub repo and set the **Root Directory** to `server`.
-3. Railway auto-detects the `railway.json` config and runs `npm start`.
-4. In **Variables**, add your env vars (copy from `server/.env.example`):
-   - `AI_PROVIDER`
-   - At least one of: `GEMINI_API_KEY`, `GROQ_API_KEY`, `OPENROUTER_API_KEY`, `CEREBRAS_API_KEY`
-   - `PORT` (Railway sets this automatically, but you can override)
-5. Note your Railway service URL (e.g. `https://ai-order-server.up.railway.app`).
+1. Create a new project at [render.com](https://render.com) by selecting **New** → **Blueprint**.
+2. Connect your GitHub repo. Render will automatically detect the `render.yaml` configuration.
+3. Render will prompt you for your API key (e.g., `GEMINI_API_KEY`).
+4. Click Apply. Once deployed, note your Render service URL (e.g. `https://ai-order-server.onrender.com`).
 
-> **json-server / db.json**: Railway ephemeral storage means `db.json` resets on redeploy. The mock DB is fine for demos — for a real app, replace it with a persistent database.
+> **Keep Awake Trick:** Render's free tier sleeps after 15 minutes of inactivity. To prevent this, go to [cron-job.org](https://cron-job.org) (free), create a cronjob to ping `https://your-render-url.onrender.com/api/health` every 14 minutes.
 
 ### Frontend → Vercel
 
@@ -80,7 +73,7 @@ This is a monorepo with two deployable services:
 3. Vercel auto-detects `vercel.json` (Vite framework, SPA rewrites).
 4. In **Environment Variables**, add:
    ```
-   VITE_API_BASE_URL = https://your-railway-url.up.railway.app
+   VITE_API_URL = https://your-render-url.onrender.com
    ```
 5. Deploy — the build runs `npm run build` and serves `dist/`.
 
