@@ -1,0 +1,19 @@
+{
+  "orders": [
+    { "id": "4821", "customer": "Priya Sharma", "status": "shipped", "total": 2499 },
+    { "id": "4822", "customer": "Rahul Verma", "status": "processing", "total": 890 },
+    { "id": "4823", "customer": "Aisha Khan", "status": "delivered", "total": 3998 },
+    { "id": "4824", "customer": "Vikram Rao", "status": "cancelled", "total": 1499 }
+  ],
+  "inventory": [
+    { "sku": "SLV-BLU-42", "name": "Sylvi Chronograph Blue", "inStock": 0, "restockDate": "2026-08-20" },
+    { "sku": "SLV-BLK-40", "name": "Sylvi Chronograph Black", "inStock": 34, "restockDate": null },
+    { "sku": "SFL-OIL-100", "name": "Onion Hair Oil 100ml", "inStock": 210, "restockDate": null },
+    { "sku": "SFL-SER-30", "name": "Vitamin C Serum 30ml", "inStock": 7, "restockDate": "2026-08-05" }
+  ],
+  "policies": [
+    { "id": "p1", "topic": "returns", "body": "Unused items may be returned within 30 days of delivery. Custom orders are final sale." },
+    { "id": "p2", "topic": "shipping", "body": "Standard delivery is 3-5 business days. Expedited is 1-2 business days." },
+    { "id": "p3", "topic": "cancellation", "body": "Orders can be cancelled free of charge if they have not yet shipped." }
+  ]
+}
