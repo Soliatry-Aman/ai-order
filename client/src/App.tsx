@@ -84,7 +84,7 @@ function App() {
 
         {/* Footer attribution */}
         <p className="mt-3 text-[10px] text-slate-600 text-center">
-          Powered by Gemini 2.5 Flash · All data is mock / local only
+          Powered by Multi-Provider AI Engine · All data is mock / local only
         </p>
       </div>
     </div>
