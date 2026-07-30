@@ -146,28 +146,10 @@ export function createGeminiProvider(): Provider {
             lastError = err;
             const status = (err as any)?.status ?? (err as any)?.code;
 
-            // 429 = rate limited → wait then retry same model
-            if (status === 429) {
-              attempt++;
-              if (attempt < MAX_RETRIES) {
-                const waitMs = parseRetryDelay(err);
-                console.warn(`  ⚠️  Rate limited on ${candidate}. Waiting ${waitMs}ms before retry ${attempt}/${MAX_RETRIES}...`);
-                await sleep(waitMs); // silently wait — no user-visible message
-                continue;
-              }
-              // Exhausted retries on this model, move to next
-              console.warn(`  ⚠️  Exhausted retries on ${candidate}. Trying next model...`);
-              break;
-            }
-
-            // 404 = model not available to this account → try next immediately
-            if (status === 404 || status === 400) {
-              console.warn(`  ⚠️  Model ${candidate} not available (${status}). Trying next...`);
-              break;
-            }
-
-            // Any other error — rethrow immediately
-            throw err;
+            // On 429 (rate limit), 404 (not found), or 400 (bad request),
+            // immediately skip to the next Gemini model in MODEL_PRIORITY
+            console.warn(`  ⚠️  Model ${candidate} failed (${status ?? "error"}). Trying next Gemini model...`);
+            break; // Try next candidate model immediately without sleeping
           }
         }
       }
