@@ -68,11 +68,26 @@ app.get("/api/health", (_req, res) => {
 
 // ── DB routes (replaces json-server, reads db.json directly) ─────────────────
 
-// GET /api/db/orders/:id
+// GET /api/db/orders/:id  — matches by order ID or customer name
 app.get("/api/db/orders/:id", (req, res) => {
   const db = readDb();
-  const order = db.orders.find((o) => o.id === req.params.id);
-  if (!order) { res.status(404).json({ error: "Not found" }); return; }
+  const query = req.params.id.trim().toLowerCase();
+
+  // 1️⃣ Try exact order ID match first
+  let order = db.orders.find((o) => String(o.id).toLowerCase() === query);
+
+  // 2️⃣ Fallback: search by customer name (case-insensitive, partial match)
+  if (!order) {
+    order = db.orders.find((o) =>
+      typeof o.customer === "string" &&
+      o.customer.toLowerCase().includes(query)
+    );
+  }
+
+  if (!order) {
+    res.status(404).json({ error: `No order found matching "${req.params.id}".` });
+    return;
+  }
   res.json(order);
 });
 
