@@ -3,10 +3,8 @@ import type { Message, ToolCall, ToolResult } from '../types';
 import { executeTool } from '../utils/tools';
 
 const MAX_TURNS = 5;
-// In dev: Vite proxy forwards /api → localhost:3001 (see vite.config.ts)
-// In prod: set VITE_API_BASE_URL in your hosting dashboard (e.g. Vercel)
-const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "";
-const API_URL = `${API_BASE}/api/chat`;
+const API_BASE = (import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL || "").replace(/\/$/, "");
+const API_URL = API_BASE ? `${API_BASE}/api/chat` : "/api/chat";
 
 export function useChat() {
   const [messages, setMessages] = useState<Message[]>(() => {

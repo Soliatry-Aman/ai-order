@@ -37,9 +37,8 @@ function findBestFuzzyMatch(
 }
 
 export async function executeTool(name: string, args: Record<string, unknown>) {
-  // In dev: Vite proxy forwards /api → localhost:3001
-  // In prod: goes directly to the deployed Express server (no json-server needed)
-  const DB_URL = "/api/db";
+  const API_BASE = (import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL || "").replace(/\/$/, "");
+  const DB_URL = API_BASE ? `${API_BASE}/api/db` : "/api/db";
 
   try {
     switch (name) {
