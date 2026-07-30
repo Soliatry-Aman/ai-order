@@ -16,9 +16,12 @@ import type { Provider, ClientMessage, SseEvent } from "./types";
 
 /** Errors on which we move to the next provider instead of failing hard */
 const FALLBACK_STATUSES = new Set([
-  401, 403,  // bad key
+  400,       // bad request / tool validation failed
+  401, 403,  // bad key / unauthorized
+  402,       // insufficient credits (OpenRouter)
   404,       // model not found
   429,       // rate limited / quota
+  500,       // internal server error from provider
   503,       // service unavailable
 ]);
 
@@ -31,6 +34,9 @@ function isFallbackError(err: unknown): boolean {
   if (/rate.?limit|quota|429|exceeded/i.test(msg)) return true;
   if (/invalid.?api.?key|unauthorized|401|403/i.test(msg)) return true;
   if (/not.?found|404/i.test(msg)) return true;
+  if (/insufficient.?credit|more credit|fewer.?max_token|afford|402/i.test(msg)) return true;
+  if (/failed_generation|failed to call a function|tool call validation failed|tool_choice/i.test(msg)) return true;
+  if (/internal.?server.?error|500|overloaded/i.test(msg)) return true;
 
   return false;
 }
@@ -84,12 +90,7 @@ export function createFallbackProvider(
             console.warn(
               `  ⚠️  Provider "${provider.name}" failed (${status}). Falling back to next provider...`
             );
-            // Emit a brief notice to the frontend so the user knows what's happening
-            yield {
-              type: "text",
-              text: `\n\n⚠️ *${provider.name}* unavailable — switching provider...\n\n`,
-            };
-            continue; // try next provider
+            continue; // try next provider — silently, no user-visible message
           }
 
           // Non-retriable error (network, parsing, etc.) — fail immediately
